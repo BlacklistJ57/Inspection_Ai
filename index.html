@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>Device Inspection System</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
+<!-- QR generation (davidshimjs/qrcodejs) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<!-- QR scanning (mebjas/html5-qrcode) -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-2: #21262d;
+    --border: #30363d;
+    --border-2: #3d444d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-2: #1f6feb;
+    --success: #3fb950;
+    --success-bg: #0f2f1a;
+    --danger: #f85149;
+    --danger-bg: #3a1212;
+    --warning: #d29922;
+    --warning-bg: #3a2a0f;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --tab-h: 62px;
+    --header-h: 56px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+    font-size: 15px; line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button { font: inherit; cursor: pointer; border: none; }
+  input, select, textarea { font: inherit; }
+
+  /* Header */
+  .app-header {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: calc(var(--header-h) + var(--safe-top));
+    padding: var(--safe-top) 14px 0 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    z-index: 100;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; }
+  .logo { font-size: 22px; }
+  .header-status { display: flex; gap: 6px; align-items: center; }
+  .chip {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 3px 10px;
+    font-size: 11px; color: var(--muted); font-weight: 600; white-space: nowrap;
+  }
+  .chip.online { color: var(--success); border-color: #1f3a2a; }
+  .chip.offline { color: var(--danger); border-color: #3a1212; }
+
+  /* Main */
+  .app-main {
+    position: fixed;
+    top: calc(var(--header-h) + var(--safe-top));
+    bottom: calc(var(--tab-h) + var(--safe-bottom));
+    left: 0; right: 0;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 16px 14px 24px;
+  }
+  .view { display: none; animation: fadeIn 0.18s ease; }
+  .view.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  h1 { font-size: 20px; margin: 0 0 14px; font-weight: 700; }
+  h2 { font-size: 16px; margin: 0 0 10px; font-weight: 600; }
+  h3 { font-size: 13px; margin: 0 0 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+
+  /* Form */
+  .form-group { margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    color: var(--text); padding: 11px 12px; font-size: 15px;
+    transition: border-color 0.15s; outline: none;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+  .form-group textarea { resize: vertical; min-height: 70px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .req { color: var(--danger); margin-left: 2px; }
+
+  /* Detected info */
+  .detected-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 12px; margin-bottom: 16px; font-size: 12px;
+  }
+  .detected-panel h3 { margin-bottom: 8px; }
+  .detected-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; }
+  .detected-grid .k { color: var(--muted); }
+  .detected-grid .v { color: var(--text); word-break: break-word; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 11px 16px; border-radius: var(--radius);
+    font-weight: 600; font-size: 14px;
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border);
+    transition: background 0.15s, transform 0.05s;
+    min-height: 42px;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:hover:not(:disabled) { background: var(--border); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn.primary { background: var(--accent-2); border-color: var(--accent-2); color: #fff; }
+  .btn.primary:hover:not(:disabled) { background: var(--accent); }
+  .btn.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+  .btn.danger:hover:not(:disabled) { background: var(--danger-bg); }
+  .btn.block { width: 100%; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* Scanner */
+  .scanner-box {
+    background: #000; border-radius: var(--radius-lg); overflow: hidden;
+    min-height: 260px; margin-bottom: 12px; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 13px;
+    border: 1px solid var(--border);
+  }
+  .scanner-box.placeholder::before { content: "📷 Camera preview will appear here"; }
+  .scanner-box video { width: 100% !important; height: auto !important; border-radius: var(--radius-lg); }
+  .scanner-box > div { width: 100% !important; }
+
+  .manual-lookup { display: flex; gap: 8px; margin-bottom: 12px; }
+  .manual-lookup input {
+    flex: 1; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text); padding: 11px 12px; font-size: 15px; outline: none;
+  }
+  .manual-lookup input:focus { border-color: var(--accent); }
+
+  /* Result */
+  .result-panel {
+    border-radius: var(--radius-lg); padding: 16px; margin-top: 12px;
+    border: 1px solid; animation: fadeIn 0.2s ease;
+  }
+  .result-panel.granted { background: var(--success-bg); border-color: var(--success); }
+  .result-panel.denied { background: var(--danger-bg); border-color: var(--danger); }
+  .result-panel.warn { background: var(--warning-bg); border-color: var(--warning); }
+  .result-badge {
+    display: inline-block; font-weight: 800; font-size: 13px;
+    letter-spacing: 1px; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+  }
+  .granted .result-badge { background: var(--success); color: #000; }
+  .denied .result-badge { background: var(--danger); color: #fff; }
+  .warn .result-badge { background: var(--warning); color: #000; }
+  .result-details { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 14px; margin-top: 8px; }
+  .result-details .k { color: var(--muted); }
+  .result-details .v { word-break: break-word; }
+
+  /* Records */
+  .records-actions { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .record-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 14px; margin-bottom: 10px;
+    cursor: pointer; transition: border-color 0.15s;
+  }
+  .record-card:hover { border-color: var(--border-2); }
+  .record-card .rc-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; gap: 8px; }
+  .record-card .rc-title { font-weight: 700; font-size: 15px; }
+  .record-card .rc-id { font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; margin-top: 2px; }
+  .record-card .rc-meta { font-size: 13px; color: var(--muted); }
+  .status-pill { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; white-space: nowrap; }
+  .status-pill.pending { background: var(--warning-bg); color: var(--warning); }
+  .status-pill.inspected { background: var(--success-bg); color: var(--success); }
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; }
+  .empty-state .icon { font-size: 40px; margin-bottom: 10px; display: block; }
+
+  /* Settings */
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); margin-bottom: 10px; gap: 12px;
+  }
+  .setting-row .label { flex: 1; }
+  .setting-row .label b { display: block; font-size: 14px; margin-bottom: 2px; }
+  .setting-row .label small { color: var(--muted); font-size: 12px; }
+  .switch { position: relative; width: 48px; height: 28px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .switch .track { position: absolute; inset: 0; background: var(--surface-2); border: 1px solid var(--border-2); border-radius: 999px; transition: background 0.2s; cursor: pointer; }
+  .switch .track::after { content: ""; position: absolute; width: 22px; height: 22px; background: var(--text); border-radius: 50%; top: 2px; left: 2px; transition: transform 0.2s, background 0.2s; }
+  .switch input:checked + .track { background: var(--accent-2); border-color: var(--accent-2); }
+  .switch input:checked + .track::after { transform: translateX(20px); background: #fff; }
+
+  /* Tab bar */
+  .tab-bar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    height: calc(var(--tab-h) + var(--safe-bottom));
+    padding-bottom: var(--safe-bottom);
+    background: var(--surface); border-top: 1px solid var(--border);
+    display: flex; z-index: 100;
+  }
+  .tab {
+    flex: 1; background: transparent; color: var(--muted);
+    font-size: 11px; font-weight: 600;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; padding: 6px 0; transition: color 0.15s;
+  }
+  .tab .tab-icon { font-size: 20px; line-height: 1; }
+  .tab.active { color: var(--accent); }
+
+  /* Modals */
+  .modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200; padding: 20px;
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .modal.open { display: flex; animation: fadeIn 0.15s ease; }
+  .modal-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 20px;
+    width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
+    position: relative;
+  }
+  .modal-close {
+    position: absolute; top: 10px; right: 10px;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--surface-2); color: var(--text);
+    font-size: 20px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; z-index: 1;
+  }
+  .modal-close:hover { background: var(--border); }
+  .qr-box { background: #fff; padding: 16px; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; margin: 12px 0; min-height: 280px; }
+  .qr-box img, .qr-box canvas { display: block; max-width: 100%; height: auto; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .modal-actions .btn { flex: 1; min-width: 0; }
+
+  /* Toast */
+  #toast-container {
+    position: fixed; bottom: calc(var(--tab-h) + var(--safe-bottom) + 12px);
+    left: 12px; right: 12px; display: flex; flex-direction: column;
+    gap: 8px; z-index: 300; pointer-events: none; align-items: center;
+  }
+  .toast {
+    background: var(--surface-2); border: 1px solid var(--border-2);
+    color: var(--text); padding: 10px 16px; border-radius: var(--radius);
+    font-size: 13px; font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    max-width: 90%; animation: toastIn 0.2s ease; pointer-events: auto;
+  }
+  .toast.success { border-color: var(--success); color: var(--success); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+  .toast.warn { border-color: var(--warning); color: var(--warning); }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .divider { height: 1px; background: var(--border); margin: 14px 0; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  @media (max-width: 380px) {
+    .form-row.three { grid-template-columns: 1fr 1fr; }
+    .tab .tab-icon { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <span class="logo">📱</span>
+    <span>Device Inspection</span>
+  </div>
+  <div class="header-status">
+    <span class="chip" id="chip-count">0 records</span>
+    <span class="chip" id="chip-net">…</span>
+  </div>
+</header>
+
+<main class="app-main">
+
+  <!-- ============ REGISTER ============ -->
+  <section id="view-register" class="view active">
+    <h1>Register Device</h1>
+    <form id="register-form" autocomplete="off">
+      <div class="detected-panel">
+        <h3>Detected on this device</h3>
+        <div class="detected-grid" id="detected-grid"></div>
+        <div class="btn-row" style="margin-top:10px">
+          <button type="button" class="btn" id="btn-use-detected" style="flex:1;font-size:12px;padding:8px;min-height:36px">Use detected brand/model</button>
+          <button type="button" class="btn" id="btn-copy-detected" style="flex:1;font-size:12px;padding:8px;min-height:36px">Copy to notes</button>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Owner name<span class="req">*</span></label>
+          <input id="f-owner" required maxlength="80" placeholder="e.g. Juma Ali">
+        </div>
+        <div class="form-group">
+          <label>Phone number</label>
+          <input id="f-phone" type="tel" maxlength="20" placeholder="+255 700 000 000">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Brand<span class="req">*</span></label>
+          <select id="f-brand" required>
+            <option value="">Select…</option>
+            <option>Samsung</option>
+            <option>Tecno</option>
+            <option>Infinix</option>
+            <option>Apple / iPhone</option>
+            <option>Nokia</option>
+            <option>Huawei</option>
+            <option>Xiaomi</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Model<span class="req">*</span></label>
+          <input id="f-model" required maxlength="60" placeholder="e.g. Galaxy A14">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>IMEI / Serial</label>
+          <input id="f-serial" maxlength="20" inputmode="numeric" placeholder="15-digit IMEI or serial">
+        </div>
+        <div class="form-group">
+          <label>Condition</label>
+          <select id="f-condition">
+            <option>Used</option>
+            <option>New</option>
+            <option>Refurbished</option>
+            <option>Faulty</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row three">
+        <div class="form-group">
+          <label>Storage (GB)</label>
+          <input id="f-storage" type="number" min="0" max="4096" placeholder="128">
+        </div>
+        <div class="form-group">
+          <label>RAM (GB)</label>
+          <input id="f-ram" type="number" min="0" max="64" placeholder="4">
+        </div>
+        <div class="form-group">
+          <label>Color</label>
+          <input id="f-color" maxlength="20" placeholder="Black">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="f-notes" maxlength="500" placeholder="Any additional info…"></textarea>
+      </div>
+      <button type="submit" class="btn primary block" id="btn-register">Register &amp; Generate QR</button>
+    </form>
+  </section>
+
+  <!-- ============ SCAN ============ -->
+  <section id="view-scan" class="view">
+    <h1>Scan &amp; Inspect</h1>
+    <div id="qr-reader" class="scanner-box placeholder"></div>
+    <div class="btn-row" style="margin-bottom:12px">
+      <button class="btn primary" id="btn-start-scan" style="flex:1">📷 Start Camera</button>
+      <button class="btn" id="btn-stop-scan" style="flex:1;display:none">Stop</button>
+    </div>
+    <div class="manual-lookup">
+      <input id="manual-id" placeholder="Enter Inspection ID (e.g. INS-2025-XXXXXX)">
+      <button class="btn" id="btn-manual">Lookup</button>
+    </div>
+    <div id="scan-result"></div>
+  </section>
+
+  <!-- ============ RECORDS ============ -->
+  <section id="view-records" class="view">
+    <h1>Records</h1>
+    <div class="records-actions">
+      <button class="btn" id="btn-export">⬇️ Export JSON</button>
+      <button class="btn" id="btn-import">⬆️ Import JSON</button>
+      <input type="file" id="import-file" accept=".json,application/json" hidden>
+    </div>
+    <div id="records-list"></div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section id="view-settings" class="view">
+    <h1>Settings</h1>
+
+    <div class="setting-row">
+      <div class="label">
+        <b>Require QR scan to view details</b>
+        <small>When ON, manual ID lookup in the Scan tab is locked. Use the QR scanner to unlock.</small>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="setting-require-scan">
+        <span class="track"></span>
+      </label>
+    </div>
+
+    <div class="setting-row">
+      <div class="label">
+        <b>Show “How it works” again</b>
+        <small>Reopen the intro tutorial.</small>
+      </div>
+      <button class="btn" id="btn-show-howto" style="min-height:36px;padding:8px 14px">Show</button>
+    </div>
+
+    <div class="setting-row">
+      <div class="label">
+        <b>Storage used</b>
+        <small id="settings-count">0 records stored locally</small>
+      </div>
+    </div>
+
+    <div class="setting-row" style="border-color: var(--danger)">
+      <div class="label">
+        <b style="color: var(--danger)">Clear all data</b>
+        <small>Deletes every record permanently. Cannot be undone.</small>
+      </div>
+      <button class="btn danger" id="btn-clear-data" style="min-height:36px;padding:8px 14px">Clear</button>
+    </div>
+
+    <p class="hint" style="margin-top:24px;text-align:center">
+      Everything runs offline in your browser.<br>
+      No data leaves this device. No API keys.
+    </p>
+  </section>
+
+</main>
+
+<!-- ============ TAB BAR ============ -->
+<nav class="tab-bar">
+  <button class="tab active" data-tab="register"><span class="tab-icon">➕</span>Register</button>
+  <button class="tab" data-tab="scan"><span class="tab-icon">📷</span>Scan</button>
+  <button class="tab" data-tab="records"><span class="tab-icon">📋</span>Records</button>
+  <button class="tab" data-tab="settings"><span class="tab-icon">⚙️</span>Settings</button>
+</nav>
+
+<!-- ============ MODALS ============ -->
+<div class="modal" id="modal-qr">
+  <div class="modal-panel">
+    <button class="modal-close" data-close="qr">×</button>
+    <h2>Inspection QR</h2>
+    <div id="qr-canvas" class="qr-box"></div>
+    <div class="mono muted" id="qr-id-label" style="font-size:12px;text-align:center;word-break:break-all"></div>
+    <div class="modal-actions">
+      <button class="btn primary" id="btn-dl-qr">⬇️ PNG</button>
+      <button class="btn" id="btn-print-qr">🖨️ Print</button>
+      <button class="btn" id="btn-copy-id">📋 Copy ID</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-record">
+  <div class="modal-panel">
+    <button class="modal-close" data-close="record">×</button>
+    <div id="record-detail"></div>
+  </div>
+</div>
+
+<div class="modal" id="modal-howto">
+  <div class="modal-panel">
+    <button class="modal-close" data-close="howto">×</button>
+    <h2>👋 How it works</h2>
+    <ol style="padding-left:20px;line-height:1.75;font-size:14px;margin:12px 0">
+      <li><b>Register</b> a device — fill the form and tap <b>Register &amp; Generate QR</b>.</li>
+      <li>The app creates a <b>signed QR code</b>. Download it as PNG or print it.</li>
+      <li>Stick the QR on the device (or keep it with the record).</li>
+      <li>Later, open the <b>Scan</b> tab and point the camera at the QR.</li>
+      <li>✅ Valid QR → <b>ACCESS GRANTED</b> with full device info.<br>❌ Invalid → denied.</li>
+    </ol>
+    <p class="hint">Everything runs offline. No data leaves this device.</p>
+    <button class="btn primary block" data-close="howto" style="margin-top:8px">Got it</button>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   DEVICE INSPECTION SYSTEM — single-file app
+   - QR generation (qrcodejs) + QR scanning (html5-qrcode)
+   - Records stored in localStorage (no backend, no API keys)
+   - Signature = SHA-256(id|serial|ts) to detect tampering
+   ============================================================ */
+
+/* ---------------- Utilities ---------------- */
+const $ = id => document.getElementById(id);
+const STORAGE_KEY = 'dis_records';
+const SETTINGS_KEY = 'dis_settings';
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]
+  ));
+}
+function escapeAttr(s) { return escapeHtml(s).replace(/`/g, '&#96;'); }
+
+function toast(msg, kind) {
+  const c = $('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind ? ' ' + kind : '');
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .25s'; }, 2200);
+  setTimeout(() => t.remove(), 2600);
+}
+
+/* ---------------- Storage ---------------- */
+function getRecords() {
+  try { const raw = localStorage.getItem(STORAGE_KEY); const arr = raw ? JSON.parse(raw) : []; return Array.isArray(arr) ? arr : []; }
+  catch (e) { return []; }
+}
+function saveRecords(records) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); } catch (e) { toast('Storage full or blocked', 'error'); }
+}
+function getSettings() {
+  const defaults = { requireScan: true, howtoShown: false };
+  try { return Object.assign(defaults, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); }
+  catch (e) { return defaults; }
+}
+function saveSettings(s) {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) {}
+}
+function updateCounts() {
+  const n = getRecords().length;
+  $('chip-count').textContent = n + ' record' + (n === 1 ? '' : 's');
+  const sc = $('settings-count'); if (sc) sc.textContent = n + ' records stored locally';
+}
+
+/* ---------------- Crypto / signature ---------------- */
+async function sha256Hex(str) {
+  try {
+    if (window.crypto && window.crypto.subtle && window.crypto.subtle.digest) {
+      const buf = new TextEncoder().encode(str);
+      const hash = await window.crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch (e) { /* fall through */ }
+  // Fallback (non-cryptographic but functional; used only if WebCrypto unavailable)
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 'fb' + (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
+}
+function makeId() {
+  const year = new Date().getFullYear();
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return 'INS-' + year + '-' + s;
+}
+async function signRecord(id, serial, ts) {
+  return await sha256Hex(id + '|' + (serial || '') + '|' + ts);
+}
+
+/* ---------------- Device detection ---------------- */
+function detectDevice() {
+  const ua = navigator.userAgent || '';
+  const info = {
+    userAgent: ua,
+    platform: navigator.platform || '—',
+    screen: (screen.width || 0) + '×' + (screen.height || 0) + ' @' + (window.devicePixelRatio || 1),
+    cores: navigator.hardwareConcurrency || '—',
+    memory: navigator.deviceMemory ? navigator.deviceMemory + ' GB' : '—',
+    language: navigator.language || '—',
+    timezone: (function () { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || '—'; } catch (e) { return '—'; } })()
+  };
+  return info;
+}
+function guessBrandModel(ua) {
+  if (/iPhone/.test(ua)) return { brand: 'Apple / iPhone', model: 'iPhone' };
+  if (/iPad/.test(ua))   return { brand: 'Apple / iPhone', model: 'iPad' };
+  const sm = ua.match(/SM-([A-Z0-9]+)/);
+  if (sm) return { brand: 'Samsung', model: 'SM-' + sm[1] };
+  if (/TECNO/i.test(ua)) return { brand: 'Tecno', model: '' };
+  if (/Infinix/i.test(ua)) return { brand: 'Infinix', model: '' };
+  if (/Redmi|POCO|Mi\s?\d/i.test(ua)) return { brand: 'Xiaomi', model: '' };
+  if (/Huawei|HONOR/i.test(ua)) return { brand: 'Huawei', model: '' };
+  if (/Nokia/i.test(ua)) return { brand: 'Nokia', model: '' };
+  return null;
+}
+function renderDetected() {
+  const d = detectDevice(), grid = $('detected-grid');
+  grid.innerHTML = Object.entries({
+    'Platform': d.platform, 'Screen': d.screen, 'CPU cores': d.cores,
+    'Memory': d.memory, 'Language': d.language, 'Timezone': d.timezone
+  }).map(([k, v]) => '<div class="k">' + escapeHtml(k) + '</div><div class="v">' + escapeHtml(v) + '</div>').join('');
+}
+
+/* ---------------- Navigation / Modals ---------------- */
+let currentTab = 'register';
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + tab));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  if (tab !== 'scan' && scannerRunning) stopScanner();
+  if (tab === 'records') renderRecords();
+}
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
+
+function openModal(name) { $('modal-' + name).classList.add('open'); }
+function closeModal(name) { $('modal-' + name).classList.remove('open'); }
+document.querySelectorAll('.modal-close').forEach(b => b.onclick = () => {
+  const m = b.closest('.modal'); if (m) m.classList.remove('open');
+});
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => closeModal(b.dataset.close));
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => {
+  if (e.target === m) m.classList.remove('open');
+}));
+
+/* ---------------- Register ---------------- */
+let pendingSignature = null;
+$('register-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const owner = $('f-owner').value.trim();
+  const phone = $('f-phone').value.trim();
+  const brand = $('f-brand').value;
+  const model = $('f-model').value.trim();
+  const serial = $('f-serial').value.trim();
+  const condition = $('f-condition').value;
+  const storage = $('f-storage').value.trim();
+  const ram = $('f-ram').value.trim();
+  const color = $('f-color').value.trim();
+  const notes = $('f-notes').value.trim();
+
+  if (!owner) return toast('Owner name is required', 'error');
+  if (!brand) return toast('Select a brand', 'error');
+  if (!model) return toast('Model is required', 'error');
+  if (serial && /^\d+$/.test(serial) && serial.length !== 15) {
+    return toast('IMEI must be exactly 15 digits (or use letters for a serial)', 'error');
+  }
+
+  const btn = $('btn-register'); btn.disabled = true; btn.textContent = 'Generating…';
+  try {
+    const id = makeId();
+    const ts = Date.now();
+    const sig = await signRecord(id, serial, ts);
+    const record = {
+      id, owner, phone, brand, model, serial, condition,
+      storage, ram, color, notes,
+      detected: detectDevice(),
+      ts, sig,
+      status: 'pending',
+      history: [{ ts, action: 'registered' }]
+    };
+    const records = getRecords();
+    records.push(record);
+    saveRecords(records);
+    updateCounts();
+    $('register-form').reset();
+    toast('✅ Registered — QR ready', 'success');
+    showQR(record);
+    renderRecords();
+  } catch (err) {
+    toast('Failed to register: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Register & Generate QR';
+  }
+});
+
+$('btn-use-detected').onclick = () => {
+  const g = guessBrandModel(navigator.userAgent || '');
+  if (!g) return toast('Could not detect brand — fill it manually', 'warn');
+  $('f-brand').value = g.brand;
+  if (g.model) $('f-model').value = g.model;
+  toast('Detected: ' + g.brand + (g.model ? ' ' + g.model : ''), 'success');
+};
+$('btn-copy-detected').onclick = () => {
+  const d = detectDevice();
+  const block = [
+    '=== Detected on this device ===',
+    'Platform: ' + d.platform,
+    'Screen: ' + d.screen,
+    'CPU cores: ' + d.cores,
+    'Memory: ' + d.memory,
+    'Language: ' + d.language,
+    'Timezone: ' + d.timezone,
+    'UA: ' + d.userAgent
+  ].join('\n');
+  const ta = $('f-notes');
+  ta.value = (ta.value ? ta.value + '\n\n' : '') + block;
+  toast('Copied to notes', 'success');
+};
+
+/* ---------------- QR generation ---------------- */
+let currentQRRecord = null;
+function qrPayload(rec) {
+  // compact keys: i=id, b=brand, m=model, s=serial, t=ts, g=sig
+  return JSON.stringify({ i: rec.id, b: rec.brand, m: rec.model, s: rec.serial || '', t: rec.ts, g: rec.sig });
+}
+function showQR(rec) {
+  if (typeof QRCode === 'undefined') return toast('QR library failed to load — check internet', 'error');
+  const el = $('qr-canvas');
+  el.innerHTML = '';
+  try {
+    new QRCode(el, {
+      text: qrPayload(rec),
+      width: 280, height: 280,
+      colorDark: '#000000', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+    currentQRRecord = rec;
+    $('qr-id-label').textContent = rec.id + ' · ' + rec.brand + ' ' + rec.model;
+    openModal('qr');
+  } catch (err) {
+    toast('QR generation failed: ' + err.message, 'error');
+  }
+}
+function getQRCanvas() {
+  const el = $('qr-canvas');
+  return el.querySelector('canvas') || el.querySelector('img');
+}
+$('btn-dl-qr').onclick = () => {
+  if (!currentQRRecord) return;
+  const c = getQRCanvas();
+  if (!c) return toast('QR not ready yet', 'warn');
+  const link = document.createElement('a');
+  link.download = 'qr-' + currentQRRecord.id + '.png';
+  link.href = c.tagName === 'CANVAS' ? c.toDataURL('image/png') : c.src;
+  link.click();
+  toast('QR downloaded', 'success');
+};
+$('btn-print-qr').onclick = () => {
+  if (!currentQRRecord) return;
+  const c = getQRCanvas();
+  if (!c) return toast('QR not ready yet', 'warn');
+  const dataUrl = c.tagName === 'CANVAS' ? c.toDataURL('image/png') : c.src;
+  const w = window.open('', '_blank');
+  if (!w) return toast('Popup blocked — allow popups to print', 'error');
+  w.document.write(
+    '<!DOCTYPE html><html><head><title>Print QR · ' + escapeHtml(currentQRRecord.id) + '</title>' +
+    '<style>body{margin:0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;}' +
+    '.c{text-align:center;padding:24px;}.c h1{font-size:20px;margin:0 0 4px;}.c p{margin:4px 0;color:#555;}' +
+    'img{width:320px;height:320px;display:block;margin:16px auto;}</style></head><body>' +
+    '<div class="c"><h1>' + escapeHtml(currentQRRecord.brand) + ' ' + escapeHtml(currentQRRecord.model) + '</h1>' +
+    '<p>' + escapeHtml(currentQRRecord.owner || '') + '</p>' +
+    '<img src="' + dataUrl + '">' +
+    '<p><b>' + escapeHtml(currentQRRecord.id) + '</b></p></div>' +
+    '</body></html>'
+  );
+  w.document.close();
+  setTimeout(() => w.print(), 300);
+};
+$('btn-copy-id').onclick = async () => {
+  if (!currentQRRecord) return;
+  try { await navigator.clipboard.writeText(currentQRRecord.id); toast('ID copied', 'success'); }
+  catch (e) { toast(currentQRRecord.id, 'warn'); }
+};
+
+/* ---------------- QR scanning ---------------- */
+let scanner = null, scannerRunning = false, scanHandled = false;
+
+function isSecureContextOK() {
+  return window.isSecureContext ||
+    location.protocol === 'https:' ||
+    location.hostname === 'localhost' ||
+    location.hostname === '127.0.0.1';
+}
+
+async function startScanner() {
+  if (scannerRunning) return;
+  if (typeof Html5Qrcode === 'undefined') return toast('Scanner library failed to load — check internet', 'error');
+  if (!isSecureContextOK()) return toast('Camera needs HTTPS or localhost. See notes at top of file.', 'error');
+  const reader = $('qr-reader');
+  reader.classList.remove('placeholder');
+  reader.innerHTML = '';
+  scanHandled = false;
+  try {
+    scanner = new Html5Qrcode('qr-reader');
+    await scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      onScanSuccess,
+      () => {} // ignore per-frame decode errors
+    );
+    scannerRunning = true;
+    $('btn-start-scan').style.display = 'none';
+    $('btn-stop-scan').style.display = '';
+  } catch (err) {
+    scanner = null;
+    scannerRunning = false;
+    reader.classList.add('placeholder');
+    const msg = String(err && err.message || err);
+    if (/NotAllowed|Permission|denied/i.test(msg)) toast('Camera permission denied', 'error');
+    else if (/NotFound|Requested device not found/i.test(msg)) toast('No camera found on this device', 'error');
+    else toast('Camera error: ' + msg, 'error');
+  }
+}
+
+async function stopScanner() {
+  if (scanner && scannerRunning) {
+    try { await scanner.stop(); } catch (e) {}
+    try { await scanner.clear(); } catch (e) {}
+  }
+  scanner = null;
+  scannerRunning = false;
+  $('btn-start-scan').style.display = '';
+  $('btn-stop-scan').style.display = 'none';
+  const reader = $('qr-reader');
+  reader.innerHTML = '';
+  reader.classList.add('placeholder');
+}
+
+async function onScanSuccess(decodedText) {
+  if (scanHandled) return;
+  scanHandled = true;
+  try {
+    await stopScanner();
+    await handleQRResult(decodedText);
+  } finally {
+    setTimeout(() => { scanHandled = false; }, 1200);
+  }
+}
+
+$('btn-start-scan').onclick = startScanner;
+$('btn-stop-scan').onclick = stopScanner;
+
+/* ---------------- Verification ---------------- */
+async function handleQRResult(text) {
+  let data;
+  try { data = JSON.parse(text); }
+  catch (e) { return renderResult({ ok: false, reason: 'invalid_json', raw: text }); }
+
+  if (!data.i || !data.t || !data.g) return renderResult({ ok: false, reason: 'missing_fields' });
+
+  const expected = await signRecord(data.i, data.s || '', data.t);
+  if (expected !== data.g) return renderResult({ ok: false, reason: 'bad_signature', id: data.i });
+
+  const records = getRecords();
+  const rec = records.find(r => r.id === data.i);
+  if (!rec) return renderResult({ ok: false, reason: 'unknown_device', id: data.i });
+
+  // recompute against stored record (guard against record edits)
+  const expected2 = await signRecord(rec.id, rec.serial || '', rec.ts);
+  if (expected2 !== rec.sig) return renderResult({ ok: false, reason: 'record_mismatch', id: rec.id });
+
+  renderResult({ ok: true, record: rec, method: 'qr' });
+}
+
+function renderResult(res) {
+  const el = $('scan-result');
+  if (res.ok) {
+    const r = res.record;
+    el.innerHTML =
+      '<div class="result-panel granted">' +
+        '<span class="result-badge">✓ ACCESS GRANTED</span>' +
+        '<div style="font-size:16px;font-weight:700;margin-bottom:4px">' + escapeHtml(r.brand) + ' ' + escapeHtml(r.model) + '</div>' +
+        '<div class="mono muted" style="font-size:12px;margin-bottom:10px">' + escapeHtml(r.id) + '</div>' +
+        '<div class="result-details">' +
+          row('Owner', r.owner) + row('Phone', r.phone) + row('Serial', r.serial) +
+          row('Condition', r.condition) + row('Storage', r.storage && r.storage + ' GB') +
+          row('RAM', r.ram && r.ram + ' GB') + row('Color', r.color) +
+          row('Registered', new Date(r.ts).toLocaleString()) +
+          row('Status', r.status === 'inspected' ? '✅ Inspected' : '⏳ Pending') +
+        '</div>' +
+        (r.notes ? '<div class="divider"></div><div style="font-size:13px"><b>Notes:</b><br>' + escapeHtml(r.notes).replace(/\n/g, '<br>') + '</div>' : '') +
+        '<div class="modal-actions">' +
+          '<button class="btn primary" id="btn-result-inspect">Mark Inspected</button>' +
+          '<button class="btn" id="btn-result-qr">Show QR</button>' +
+        '</div>' +
+      '</div>';
+    const bi = $('btn-result-inspect'); if (bi) bi.onclick = () => { markInspected(r.id); renderResult({ ok: true, record: getRecords().find(x => x.id === r.id), method: 'qr' }); };
+    const bq = $('btn-result-qr'); if (bq) bq.onclick = () => showQR(r);
+    // log verification in history
+    appendHistory(r.id, 'verified_by_qr');
+  } else {
+    const reasons = {
+      invalid_json: 'QR data is not valid JSON',
+      missing_fields: 'QR is missing required fields',
+      bad_signature: 'QR signature is invalid (tampered or wrong format)',
+      unknown_device: 'No record found for this ID',
+      record_mismatch: 'Record signature does not match stored data',
+      manual_required_qr: 'Manual lookup disabled — QR scan is required'
+    };
+    const reasonText = reasons[res.reason] || 'Verification failed';
+    el.innerHTML =
+      '<div class="result-panel denied">' +
+        '<span class="result-badge">✗ ACCESS DENIED</span>' +
+        '<div style="font-weight:600;margin-bottom:4px">' + escapeHtml(reasonText) + '</div>' +
+        (res.id ? '<div class="mono muted" style="font-size:12px">ID: ' + escapeHtml(res.id) + '</div>' : '') +
+        (res.raw ? '<div class="mono muted" style="font-size:11px;margin-top:8px;word-break:break-all">' + escapeHtml(String(res.raw).slice(0, 200)) + '</div>' : '') +
+        '<div class="modal-actions"><button class="btn" id="btn-result-register">Register this device</button></div>' +
+      '</div>';
+    const br = $('btn-result-register'); if (br) br.onclick = () => switchTab('register');
+  }
+}
+function row(k, v) {
+  if (v == null || v === '') return '';
+  return '<div class="k">' + escapeHtml(k) + '</div><div class="v">' + escapeHtml(v) + '</div>';
+}
+
+/* ---------------- Manual lookup ---------------- */
+$('btn-manual').onclick = manualLookup;
+$('manual-id').addEventListener('keydown', e => { if (e.key === 'Enter') manualLookup(); });
+
+async function manualLookup() {
+  const id = $('manual-id').value.trim().toUpperCase();
+  if (!id) return toast('Enter an Inspection ID', 'warn');
+  const settings = getSettings();
+  if (settings.requireScan) return renderResult({ ok: false, reason: 'manual_required_qr', id });
+  const records = getRecords();
+  const rec = records.find(r => r.id === id);
+  if (!rec) return renderResult({ ok: false, reason: 'unknown_device', id });
+  renderResult({ ok: true, record: rec, method: 'manual' });
+  // downgrade the look-and-feel to warning
+  const el = $('scan-result').querySelector('.result-panel');
+  if (el) { el.className = 'result-panel warn'; el.querySelector('.result-badge').textContent = '⚠ VERIFIED VIA MANUAL ENTRY'; }
+}
+
+/* ---------------- Record detail + actions ---------------- */
+function renderRecords() {
+  const list = $('records-list');
+  const records = getRecords().slice().sort((a, b) => b.ts - a.ts);
+  if (!records.length) {
+    list.innerHTML = '<div class="empty-state"><span class="icon">📋</span>No records yet.<br>Register your first device to get started.</div>';
+    return;
+  }
+  list.innerHTML = records.map(r => (
+    '<div class="record-card" data-id="' + escapeAttr(r.id) + '">' +
+      '<div class="rc-head">' +
+        '<div><div class="rc-title">' + escapeHtml(r.brand || '—') + ' ' + escapeHtml(r.model || '') + '</div>' +
+        '<div class="rc-id mono">' + escapeHtml(r.id) + '</div></div>' +
+        '<span class="status-pill ' + (r.status === 'inspected' ? 'inspected' : 'pending') + '">' +
+          (r.status === 'inspected' ? 'Inspected' : 'Pending') +
+        '</span>' +
+      '</div>' +
+      '<div class="rc-meta">' + escapeHtml(r.owner || 'No owner') + ' · ' + new Date(r.ts).toLocaleDateString() + '</div>' +
+    '</div>'
+  )).join('');
+  list.querySelectorAll('.record-card').forEach(card => {
+    card.addEventListener('click', () => openRecordDetail(card.dataset.id));
+  });
+}
+
+function openRecordDetail(id) {
+  const rec = getRecords().find(r => r.id === id);
+  if (!rec) return toast('Record not found', 'error');
+  const det = rec.detected || {};
+  const el = $('record-detail');
+  el.innerHTML =
+    '<h2 style="margin-bottom:4px">' + escapeHtml(rec.brand) + ' ' + escapeHtml(rec.model) + '</h2>' +
+    '<div class="mono muted" style="font-size:12px;margin-bottom:14px">' + escapeHtml(rec.id) + '</div>' +
+    '<div class="result-details">' +
+      row('Owner', rec.owner) + row('Phone', rec.phone) + row('Serial', rec.serial) +
+      row('Condition', rec.condition) + row('Storage', rec.storage && rec.storage + ' GB') +
+      row('RAM', rec.ram && rec.ram + ' GB') + row('Color', rec.color) +
+      row('Registered', new Date(rec.ts).toLocaleString()) +
+      row('Status', rec.status === 'inspected' ? '✅ Inspected' : '⏳ Pending') +
+    '</div>' +
+    (rec.notes ? '<div class="divider"></div><div style="font-size:13px"><b>Notes:</b><br>' + escapeHtml(rec.notes).replace(/\n/g, '<br>') + '</div>' : '') +
+    (det && det.platform ? '<div class="divider"></div><div style="font-size:12px"><b>Detected at registration:</b><br><span class="muted">' +
+      'Platform: ' + escapeHtml(det.platform) + '<br>' +
+      'Screen: ' + escapeHtml(det.screen) + '<br>' +
+      'Cores: ' + escapeHtml(det.cores) + '<br>' +
+      'Language: ' + escapeHtml(det.language) + '<br>' +
+      'Timezone: ' + escapeHtml(det.timezone) + '</span></div>' : '') +
+    (rec.history && rec.history.length ? '<div class="divider"></div><div style="font-size:12px"><b>History:</b><br>' +
+      rec.history.map(h => '<div class="muted">' + new Date(h.ts).toLocaleString() + ' — ' + escapeHtml(h.action) + '</div>').join('') +
+      '</div>' : '') +
+    '<div class="modal-actions">' +
+      '<button class="btn primary" id="btn-detail-qr">Show QR</button>' +
+      '<button class="btn" id="btn-detail-inspected">Mark Inspected</button>' +
+      '<button class="btn danger" id="btn-detail-delete">Delete</button>' +
+    '</div>';
+  $('btn-detail-qr').onclick = () => { closeModal('record'); showQR(rec); };
+  $('btn-detail-inspected').onclick = () => { markInspected(rec.id); closeModal('record'); };
+  $('btn-detail-delete').onclick = () => {
+    if (!confirm('Delete record ' + rec.id + ' permanently?')) return;
+    const records = getRecords().filter(r => r.id !== rec.id);
+    saveRecords(records); updateCounts(); renderRecords();
+    closeModal('record'); toast('Record deleted', 'success');
+  };
+  openModal('record');
+}
+
+function markInspected(id) {
+  const records = getRecords();
+  const rec = records.find(r => r.id === id);
+  if (!rec) return;
+  if (rec.status !== 'inspected') {
+    rec.status = 'inspected';
+    rec.history = rec.history || [];
+    rec.history.push({ ts: Date.now(), action: 'inspected' });
+    saveRecords(records);
+    renderRecords();
+    toast('✅ Marked as inspected', 'success');
+  } else {
+    toast('Already marked inspected', 'warn');
+  }
+}
+function appendHistory(id, action) {
+  const records = getRecords();
+  const rec = records.find(r => r.id === id);
+  if (!rec) return;
+  rec.history = rec.history || [];
+  rec.history.push({ ts: Date.now(), action });
+  saveRecords(records);
+}
+
+/* ---------------- Import / Export ---------------- */
+$('btn-export').onclick = () => {
+  const data = { version: 1, exportedAt: Date.now(), records: getRecords(), settings: getSettings() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'dis-export-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('Export downloaded', 'success');
+};
+$('btn-import').onclick = () => $('import-file').click();
+$('import-file').onchange = e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      const incoming = Array.isArray(data) ? data : (data.records || []);
+      if (!Array.isArray(incoming) || !incoming.length) throw new Error('No records found in file');
+      const existing = getRecords();
+      const ids = new Set(existing.map(r => r.id));
+      let added = 0, skipped = 0;
+      for (const r of incoming) {
+        if (!r || !r.id || !r.ts) { skipped++; continue; }
+        if (ids.has(r.id)) { skipped++; continue; }
+        existing.push(r); ids.add(r.id); added++;
+      }
+      saveRecords(existing); updateCounts(); renderRecords();
+      toast('Imported ' + added + ' new record' + (added === 1 ? '' : 's') + (skipped ? ' (' + skipped + ' skipped)' : ''), 'success');
+    } catch (err) {
+      toast('Import failed: ' + err.message, 'error');
+    } finally {
+      e.target.value = '';
+    }
+  };
+  reader.readAsText(f);
+};
+
+/* ---------------- Settings ---------------- */
+const settingRequireScan = $('setting-require-scan');
+const settings0 = getSettings();
+settingRequireScan.checked = !!settings0.requireScan;
+settingRequireScan.onchange = () => {
+  const s = getSettings(); s.requireScan = settingRequireScan.checked; saveSettings(s);
+  toast('Require QR scan: ' + (s.requireScan ? 'ON' : 'OFF'), 'success');
+};
+$('btn-show-howto').onclick = () => openModal('howto');
+$('btn-clear-data').onclick = () => {
+  if (!confirm('Delete ALL records permanently? This cannot be undone.')) return;
+  if (!confirm('Are you absolutely sure? Consider exporting first.')) return;
+  saveRecords([]); updateCounts(); renderRecords();
+  toast('All records deleted', 'success');
+};
+
+/* ---------------- Online/offline chip ---------------- */
+function updateNetChip() {
+  const el = $('chip-net');
+  if (navigator.onLine) { el.textContent = 'Online'; el.className = 'chip online'; }
+  else { el.textContent = 'Offline'; el.className = 'chip offline'; }
+}
+window.addEventListener('online', updateNetChip);
+window.addEventListener('offline', updateNetChip);
+
+/* ---------------- First-launch how-to ---------------- */
+function maybeShowHowto() {
+  const s = getSettings();
+  if (s.howtoShown) return;
+  openModal('howto');
+  const closeBtns = document.querySelectorAll('#modal-howto .modal-close, #modal-howto [data-close="howto"]');
+  const mark = () => { const cur = getSettings(); cur.howtoShown = true; saveSettings(cur); };
+  closeBtns.forEach(b => b.addEventListener('click', mark, { once: true }));
+}
+
+/* ---------------- Visibility ---------------- */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && scannerRunning) stopScanner();
+});
+
+/* ---------------- Init ---------------- */
+(function init() {
+  renderDetected();
+  renderRecords();
+  updateCounts();
+  updateNetChip();
+  maybeShowHowto();
+  // Default: open the scan tab if records already exist, otherwise register
+  if (getRecords().length > 0) switchTab('scan');
+})();
+</script>
+</body>
+        </html>
